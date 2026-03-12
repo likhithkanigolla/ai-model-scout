@@ -31,7 +31,7 @@ export default function KnowledgeBase() {
             className="px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground"
           >
             <option value="">All Models</option>
-            {uniqueModels.map((m) => (
+            {uniqueModels.map((m: string) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
