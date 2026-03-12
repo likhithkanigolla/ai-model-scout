@@ -24,40 +24,37 @@ export default function TrainingResults() {
       if (step === "trained" || step === "complete") setTraining(false);
       return;
     }
+    let progress: Record<string, number> = { ...trainingProgress };
     const interval = setInterval(() => {
-      setTrainingProgress((prev: Record<string, number>) => {
-        const next = { ...prev };
-        let allDone = true;
-        models.forEach((m, i) => {
-          const current = next[m] ?? 0;
-          const target = 100;
-          const speed = (i + 1) * 3 + Math.random() * 5;
-          next[m] = Math.min(current + speed, target);
-          if (next[m] < target) allDone = false;
-        });
-        if (allDone) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setTraining(false);
-            setTrainingResults(MOCK_RESULTS);
-            setStep("trained");
-            addExperiment({
-              id: Date.now().toString(),
-              datasetName: dataset?.name ?? "dataset.csv",
-              datasetSize: dataset?.rows ?? 150,
-              featureCount: dataset?.columns ?? 5,
-              bestModel: "Random Forest",
-              accuracy: 0.97,
-              date: new Date().toISOString().split("T")[0],
-            });
-            setTimeout(() => {
-              setStep("complete");
-              setShowBest(true);
-            }, 2000);
-          }, 500);
-        }
-        return next;
+      let allDone = true;
+      models.forEach((m, i) => {
+        const current = progress[m] ?? 0;
+        const speed = (i + 1) * 3 + Math.random() * 5;
+        progress[m] = Math.min(current + speed, 100);
+        if (progress[m] < 100) allDone = false;
       });
+      setTrainingProgress({ ...progress });
+      if (allDone) {
+        clearInterval(interval);
+        setTimeout(() => {
+          setTraining(false);
+          setTrainingResults(MOCK_RESULTS);
+          setStep("trained");
+          addExperiment({
+            id: Date.now().toString(),
+            datasetName: dataset?.name ?? "dataset.csv",
+            datasetSize: dataset?.rows ?? 150,
+            featureCount: dataset?.columns ?? 5,
+            bestModel: "Random Forest",
+            accuracy: 0.97,
+            date: new Date().toISOString().split("T")[0],
+          });
+          setTimeout(() => {
+            setStep("complete");
+            setShowBest(true);
+          }, 2000);
+        }, 500);
+      }
     }, 200);
     return () => clearInterval(interval);
   }, [step]);
