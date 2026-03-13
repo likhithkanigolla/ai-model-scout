@@ -1,73 +1,74 @@
-# Welcome to your Lovable project
+# COMPASSLLM Frontend
 
-## Project info
+React frontend for the COMPASSLLM AutoML workflow.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Repository: `https://github.com/likhithkanigolla/COMPASSLLM`
 
-## How can I edit this code?
+## What It Does
 
-There are several ways of editing your application.
+- Uploads datasets.
+- Shows CSV previews.
+- Lets the user choose a target column.
+- Lets the user exclude columns and rerun analysis.
+- Displays analysis charts and summary metrics.
+- Requests LLM model recommendations.
+- Triggers training and shows results.
+- Provides download links for trained models.
+- Displays dashboard metrics and knowledge-base entries.
 
-**Use Lovable**
+## Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- Zustand
+- Framer Motion
+- Recharts
 
-Changes made via Lovable will be committed automatically to this repo.
+## Local Development
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The dev server runs on port `8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## API Integration
 
-**Use GitHub Codespaces**
+The frontend proxies API calls from `/api` to:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```text
+http://127.0.0.1:10120
+```
 
-## What technologies are used for this project?
+This is configured in `vite.config.ts`.
 
-This project is built with:
+## Fallback Behavior
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The frontend API client supports fallback mock data for local development when the backend is unavailable.
 
-## How can I deploy this project?
+Relevant environment variables:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- `VITE_API_BASE_URL` default: `/api`
+- `VITE_ENABLE_API_FALLBACK` default: `true`
 
-## Can I connect a custom domain to my Lovable project?
+## Recommended Run Order
 
-Yes, you can!
+1. Start PostgreSQL.
+2. Start the backend.
+3. Start the frontend.
+4. Open the app in the browser.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Main User Flow
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+1. Upload dataset.
+2. Review preview.
+3. Run analysis.
+4. Exclude columns or change target.
+5. Re-run analysis.
+6. Continue to recommendations.
+7. Train models.
+8. Download artifacts.

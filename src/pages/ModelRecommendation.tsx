@@ -32,6 +32,18 @@ function pickRandomRows<T>(rows: T[], minCount = 10, maxCount = 15): T[] {
   return shuffled.slice(0, target);
 }
 
+function filterExcludedColumns(
+  rows: Record<string, string | number | null>[],
+  excludedColumns: string[],
+): Record<string, string | number | null>[] {
+  const excluded = new Set(excludedColumns);
+  if (!excluded.size) {
+    return rows;
+  }
+
+  return rows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => !excluded.has(key))));
+}
+
 export default function ModelRecommendation() {
   const { step, setStep, setRecommendations, recommendations, dataset, userInstruction, setUserInstruction } = usePipeline();
   const navigate = useNavigate();
@@ -81,7 +93,9 @@ export default function ModelRecommendation() {
       setTimeout(() => setThinkStep(i + 1), (i + 1) * 1200)
     );
 
-    const sampleData = dataset.preview ? pickRandomRows(dataset.preview, 10, 15) : undefined;
+    const sampleData = dataset.preview
+      ? pickRandomRows(filterExcludedColumns(dataset.preview, dataset.excludedColumns), 10, 15)
+      : undefined;
 
     const runRecommendation = async () => {
       try {

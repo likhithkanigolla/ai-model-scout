@@ -4,12 +4,20 @@ export interface DatasetInfo {
   rows: number;
   columns: number;
   targetColumn: string;
+  excludedColumns: string[];
   preview: Record<string, string | number | null>[];
   numericFeatures: number;
   categoricalFeatures: number;
   missingPercentage: number;
   classImbalance: number;
   classDistribution?: Record<string, number>;
+  includedColumns?: string[];
+  columnProfiles?: Array<{
+    name: string;
+    dataType: string;
+    missingRatio: number;
+    uniqueCount: number;
+  }>;
 }
 
 export interface ModelRecommendation {

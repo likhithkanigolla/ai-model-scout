@@ -29,11 +29,14 @@ export default function UploadDataset() {
         rows: data.rows,
         columns: data.columns,
         targetColumn,
+        excludedColumns: [],
         preview: data.preview,
         numericFeatures: 0,
         categoricalFeatures: 0,
         missingPercentage: 0,
         classImbalance: 0,
+        includedColumns: previewColumns.filter((column) => column !== targetColumn),
+        columnProfiles: [],
       };
 
       setFileName(file.name);

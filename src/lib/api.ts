@@ -14,6 +14,14 @@ export interface AnalyzeResponse {
   missing_value_ratio: number;
   class_distribution: Record<string, number>;
   imbalance_ratio: number;
+  included_columns: string[];
+  excluded_columns: string[];
+  column_profiles: Array<{
+    name: string;
+    data_type: string;
+    missing_ratio: number;
+    unique_count: number;
+  }>;
   meta_features: Record<string, string | number | null>;
 }
 
@@ -100,6 +108,14 @@ const MOCK_ANALYSIS: AnalyzeResponse = {
   missing_value_ratio: 0,
   class_distribution: { setosa: 0.3333, versicolor: 0.3333, virginica: 0.3333 },
   imbalance_ratio: 1.0,
+  included_columns: ["sepal_length", "sepal_width", "petal_length", "petal_width"],
+  excluded_columns: [],
+  column_profiles: [
+    { name: "sepal_length", data_type: "numeric", missing_ratio: 0, unique_count: 35 },
+    { name: "sepal_width", data_type: "numeric", missing_ratio: 0, unique_count: 23 },
+    { name: "petal_length", data_type: "numeric", missing_ratio: 0, unique_count: 43 },
+    { name: "petal_width", data_type: "numeric", missing_ratio: 0, unique_count: 22 },
+  ],
   meta_features: {},
 };
 
@@ -169,7 +185,11 @@ export async function uploadDataset(file: File): Promise<{ data: UploadResponse;
   return apiFetch<UploadResponse>("/datasets/upload", { method: "POST", body: formData }, mock);
 }
 
-export async function analyzeDataset(datasetId: string, targetColumn: string): Promise<{ data: AnalyzeResponse; fallback: boolean }> {
+export async function analyzeDataset(
+  datasetId: string,
+  targetColumn: string,
+  excludedColumns: string[] = [],
+): Promise<{ data: AnalyzeResponse; fallback: boolean }> {
   const mock = { ...MOCK_ANALYSIS, dataset_id: datasetId || MOCK_ANALYSIS.dataset_id };
 
   return apiFetch<AnalyzeResponse>(
@@ -177,7 +197,7 @@ export async function analyzeDataset(datasetId: string, targetColumn: string): P
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dataset_id: datasetId, target_column: targetColumn }),
+      body: JSON.stringify({ dataset_id: datasetId, target_column: targetColumn, excluded_columns: excludedColumns }),
     },
     mock,
   );

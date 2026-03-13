@@ -62,7 +62,7 @@ export default function TrainingResults() {
           id: Date.now().toString(),
           datasetName: dataset.name,
           datasetSize: dataset.rows,
-          featureCount: Math.max(dataset.columns - 1, 0),
+          featureCount: dataset.numericFeatures + dataset.categoricalFeatures,
           bestModel: bestResult.model,
           accuracy: bestResult.accuracy,
           date: new Date().toISOString().split("T")[0],
