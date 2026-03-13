@@ -19,7 +19,7 @@ export default function AppSidebar() {
     <aside className="w-60 shrink-0 h-screen sticky top-0 bg-card border-r border-border flex flex-col">
       <div className="px-6 py-6">
         <h1 className="text-sm font-semibold text-foreground tracking-tight leading-tight">
-          LLM-Assisted ML<br />
+          COMPASS-LLM<br />
           <span className="text-muted-foreground font-normal text-xs">Model Recommendation</span>
         </h1>
       </div>

@@ -1,13 +1,15 @@
 export interface DatasetInfo {
+  id: string;
   name: string;
   rows: number;
   columns: number;
   targetColumn: string;
-  preview: Record<string, string | number>[];
+  preview: Record<string, string | number | null>[];
   numericFeatures: number;
   categoricalFeatures: number;
   missingPercentage: number;
   classImbalance: number;
+  classDistribution?: Record<string, number>;
 }
 
 export interface ModelRecommendation {
@@ -24,6 +26,8 @@ export interface TrainingResult {
   recall: number;
   f1Score: number;
   trainingTime: string;
+  artifactId?: string;
+  downloadUrl?: string;
 }
 
 export interface Experiment {
@@ -41,6 +45,7 @@ export type PipelineStep =
   | "uploaded"
   | "analyzing"
   | "analyzed"
+  | "configuring"
   | "recommending"
   | "recommended"
   | "training"

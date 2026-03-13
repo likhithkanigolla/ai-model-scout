@@ -1,21 +1,47 @@
+import { useEffect, useState } from "react";
 import PageTransition from "@/components/PageTransition";
 import MetricCard from "@/components/MetricCard";
 import { Database, FlaskConical, Cpu, Target } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { motion } from "framer-motion";
-import { usePipeline } from "@/store/pipeline";
-
-const chartData = [
-  { name: "Random Forest", accuracy: 0.94 },
-  { name: "SVM", accuracy: 0.89 },
-  { name: "XGBoost", accuracy: 0.96 },
-  { name: "Logistic Reg.", accuracy: 0.82 },
-  { name: "KNN", accuracy: 0.85 },
-];
+import { getDashboardSummary, type DashboardSummaryResponse } from "@/lib/api";
+import { toast } from "@/components/ui/sonner";
 
 export default function Dashboard() {
-  const experiments = usePipeline((s) => s.experiments);
-  const best = experiments.length > 0 ? Math.max(...experiments.map((e) => e.accuracy)) : 0.97;
+  const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSummary = async () => {
+      try {
+        const { data, fallback } = await getDashboardSummary();
+        if (cancelled) return;
+        setSummary(data);
+        if (fallback) {
+          toast("Dashboard API unavailable: showing fallback metrics.");
+        }
+      } catch {
+        if (!cancelled) {
+          toast("Failed to load dashboard metrics.");
+        }
+      }
+    };
+
+    loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const datasetsProcessed = summary?.datasets_processed ?? 0;
+  const experimentsRun = summary?.experiments_run ?? 0;
+  const modelsTested = summary?.models_tested ?? 0;
+  const bestAccuracy = summary?.best_accuracy ?? 0;
+  const chartData = (summary?.model_performance ?? []).map((item) => ({
+    name: item.model_name,
+    accuracy: item.average_accuracy,
+  }));
 
   return (
     <PageTransition>
@@ -26,10 +52,10 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard icon={Database} value={experiments.length} label="Datasets Processed" delay={0} />
-          <MetricCard icon={FlaskConical} value={experiments.length} label="Experiments Run" delay={0.05} />
-          <MetricCard icon={Cpu} value={12} label="Models Tested" delay={0.1} />
-          <MetricCard icon={Target} value={`${(best * 100).toFixed(0)}%`} label="Best Accuracy" delay={0.15} />
+          <MetricCard icon={Database} value={datasetsProcessed} label="Datasets Processed" delay={0} />
+          <MetricCard icon={FlaskConical} value={experimentsRun} label="Experiments Run" delay={0.05} />
+          <MetricCard icon={Cpu} value={modelsTested} label="Models Tested" delay={0.1} />
+          <MetricCard icon={Target} value={`${(bestAccuracy * 100).toFixed(0)}%`} label="Best Accuracy" delay={0.15} />
         </div>
 
         <motion.div

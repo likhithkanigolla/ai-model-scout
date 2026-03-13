@@ -1,67 +1,112 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageTransition from "@/components/PageTransition";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { toast } from "@/components/ui/sonner";
 import { usePipeline } from "@/store/pipeline";
 import type { TrainingResult } from "@/types/pipeline";
-
-const MOCK_RESULTS: TrainingResult[] = [
-  { model: "Random Forest", accuracy: 0.97, precision: 0.97, recall: 0.97, f1Score: 0.97, trainingTime: "1.2s" },
-  { model: "XGBoost", accuracy: 0.95, precision: 0.95, recall: 0.94, f1Score: 0.95, trainingTime: "0.8s" },
-  { model: "SVM", accuracy: 0.93, precision: 0.93, recall: 0.92, f1Score: 0.92, trainingTime: "0.5s" },
-];
-
-const models = ["Random Forest", "XGBoost", "SVM"];
+import { trainModels } from "@/lib/api";
 
 export default function TrainingResults() {
-  const { step, setStep, setTrainingResults, setTrainingProgress, trainingProgress, addExperiment, dataset } = usePipeline();
+  const { step, setStep, setTrainingResults, setTrainingProgress, trainingProgress, addExperiment, dataset, recommendations, trainingResults } = usePipeline();
   const [training, setTraining] = useState(step === "training");
   const [showBest, setShowBest] = useState(step === "complete");
+  const [trainStarted, setTrainStarted] = useState(false);
+
+  const models = useMemo(
+    () => (recommendations.length > 0 ? recommendations.map((r) => r.name) : ["Random Forest", "XGBoost", "Support Vector Machine"]),
+    [recommendations]
+  );
 
   useEffect(() => {
+    if (step !== "training") {
+      setTrainStarted(false);
+    }
     if (step !== "training") {
       if (step === "trained" || step === "complete") setTraining(false);
       return;
     }
+    if (!dataset || trainStarted) return;
+    setTrainStarted(true);
+
     let progress: Record<string, number> = { ...trainingProgress };
     const interval = setInterval(() => {
-      let allDone = true;
       models.forEach((m, i) => {
         const current = progress[m] ?? 0;
         const speed = (i + 1) * 3 + Math.random() * 5;
         progress[m] = Math.min(current + speed, 100);
-        if (progress[m] < 100) allDone = false;
       });
       setTrainingProgress({ ...progress });
-      if (allDone) {
+    }, 200);
+
+    const runTraining = async () => {
+      try {
+        const { data, fallback } = await trainModels(dataset.id);
+        const mapped: TrainingResult[] = data.results.map((r) => ({
+          model: r.model_name,
+          accuracy: r.accuracy,
+          precision: r.precision,
+          recall: r.recall,
+          f1Score: r.f1_score,
+          trainingTime: `${r.training_time.toFixed(2)}s`,
+          artifactId: r.artifact_id ?? undefined,
+          downloadUrl: r.download_url ?? undefined,
+        }));
+
+        setTrainingProgress(Object.fromEntries(models.map((m) => [m, 100])));
+        setTrainingResults(mapped);
+
+        const bestResult = mapped.reduce((best, current) => (current.accuracy > best.accuracy ? current : best), mapped[0]);
+        addExperiment({
+          id: Date.now().toString(),
+          datasetName: dataset.name,
+          datasetSize: dataset.rows,
+          featureCount: Math.max(dataset.columns - 1, 0),
+          bestModel: bestResult.model,
+          accuracy: bestResult.accuracy,
+          date: new Date().toISOString().split("T")[0],
+        });
+
+        if (fallback) {
+          toast("Training API unavailable: showing fallback training results.");
+        }
+      } catch {
+        toast("Model training failed.");
+      } finally {
         clearInterval(interval);
         setTimeout(() => {
           setTraining(false);
-          setTrainingResults(MOCK_RESULTS);
           setStep("trained");
-          addExperiment({
-            id: Date.now().toString(),
-            datasetName: dataset?.name ?? "dataset.csv",
-            datasetSize: dataset?.rows ?? 150,
-            featureCount: dataset?.columns ?? 5,
-            bestModel: "Random Forest",
-            accuracy: 0.97,
-            date: new Date().toISOString().split("T")[0],
-          });
           setTimeout(() => {
             setStep("complete");
             setShowBest(true);
-          }, 2000);
+          }, 1600);
         }, 500);
       }
-    }, 200);
-    return () => clearInterval(interval);
-  }, [step]);
+    };
 
-  const best = MOCK_RESULTS[0];
-  const accChart = MOCK_RESULTS.map((r) => ({ name: r.model, accuracy: r.accuracy }));
-  const timeChart = MOCK_RESULTS.map((r) => ({ name: r.model, time: parseFloat(r.trainingTime) }));
+    runTraining();
+
+    return () => clearInterval(interval);
+  }, [
+    step,
+    dataset,
+    trainStarted,
+    trainingProgress,
+    models,
+    setTrainingProgress,
+    setTrainingResults,
+    addExperiment,
+    setStep,
+  ]);
+
+  const displayResults = trainingResults.length > 0 ? trainingResults : [];
+  const best = displayResults.length > 0
+    ? displayResults.reduce((top, item) => (item.accuracy > top.accuracy ? item : top), displayResults[0])
+    : null;
+  const accChart = displayResults.map((r) => ({ name: r.model, accuracy: r.accuracy }));
+  const timeChart = displayResults.map((r) => ({ name: r.model, time: parseFloat(r.trainingTime) }));
 
   return (
     <PageTransition>
@@ -92,13 +137,13 @@ export default function TrainingResults() {
             </motion.div>
           ) : (
             <motion.div key="results" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-              {showBest && (
+              {showBest && best && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card-elevated p-8 text-center border-primary/20">
                   <Trophy className="h-10 w-10 text-primary mx-auto mb-3" />
                   <h2 className="text-xl font-semibold text-foreground">Best Performing Model</h2>
                   <p className="metric-value mt-2">{best.model}</p>
                   <p className="text-3xl font-bold text-primary mt-1">{(best.accuracy * 100).toFixed(1)}% Accuracy</p>
-                  <p className="body-light mt-3 max-w-md mx-auto">Random Forest achieved the highest accuracy with balanced precision and recall across all classes.</p>
+                  <p className="body-light mt-3 max-w-md mx-auto">Top model selected from live training metrics (or fallback if backend is unavailable).</p>
                 </motion.div>
               )}
 
@@ -106,13 +151,13 @@ export default function TrainingResults() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
-                      {["Model", "Accuracy", "Precision", "Recall", "F1 Score", "Training Time"].map((h) => (
+                      {["Model", "Accuracy", "Precision", "Recall", "F1 Score", "Training Time", "Download"].map((h) => (
                         <th key={h} className="px-5 py-3 text-left font-medium text-muted-foreground">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {MOCK_RESULTS.map((r, i) => (
+                    {displayResults.map((r, i) => (
                       <motion.tr
                         key={r.model}
                         initial={{ opacity: 0 }}
@@ -126,6 +171,18 @@ export default function TrainingResults() {
                         <td className="px-5 py-3 text-foreground">{(r.recall * 100).toFixed(1)}%</td>
                         <td className="px-5 py-3 text-foreground">{(r.f1Score * 100).toFixed(1)}%</td>
                         <td className="px-5 py-3 text-muted-foreground">{r.trainingTime}</td>
+                        <td className="px-5 py-3">
+                          {r.downloadUrl ? (
+                            <a
+                              href={`/api${r.downloadUrl}`}
+                              className="text-xs font-medium text-primary bg-sidebar-accent px-2.5 py-1 rounded-full"
+                            >
+                              Download
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Unavailable</span>
+                          )}
+                        </td>
                       </motion.tr>
                     ))}
                   </tbody>

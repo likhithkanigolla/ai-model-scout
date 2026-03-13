@@ -3,45 +3,54 @@ import { useNavigate } from "react-router-dom";
 import PageTransition from "@/components/PageTransition";
 import { Upload, FileSpreadsheet, Rows3, Columns3, Target } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "@/components/ui/sonner";
 import { usePipeline } from "@/store/pipeline";
 import type { DatasetInfo } from "@/types/pipeline";
-
-const MOCK_PREVIEW = [
-  { sepal_length: 5.1, sepal_width: 3.5, petal_length: 1.4, petal_width: 0.2, species: "setosa" },
-  { sepal_length: 4.9, sepal_width: 3.0, petal_length: 1.4, petal_width: 0.2, species: "setosa" },
-  { sepal_length: 4.7, sepal_width: 3.2, petal_length: 1.3, petal_width: 0.2, species: "setosa" },
-  { sepal_length: 5.0, sepal_width: 3.6, petal_length: 1.4, petal_width: 0.2, species: "setosa" },
-  { sepal_length: 5.4, sepal_width: 3.9, petal_length: 1.7, petal_width: 0.4, species: "setosa" },
-  { sepal_length: 7.0, sepal_width: 3.2, petal_length: 4.7, petal_width: 1.4, species: "versicolor" },
-  { sepal_length: 6.4, sepal_width: 3.2, petal_length: 4.5, petal_width: 1.5, species: "versicolor" },
-  { sepal_length: 6.9, sepal_width: 3.1, petal_length: 4.9, petal_width: 1.5, species: "versicolor" },
-  { sepal_length: 6.3, sepal_width: 3.3, petal_length: 6.0, petal_width: 2.5, species: "virginica" },
-  { sepal_length: 5.8, sepal_width: 2.7, petal_length: 5.1, petal_width: 1.9, species: "virginica" },
-];
+import { uploadDataset } from "@/lib/api";
 
 export default function UploadDataset() {
   const [dragging, setDragging] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
-  const { setDataset, setStep } = usePipeline();
+  const { setDataset, setStep, dataset } = usePipeline();
 
-  const handleFile = useCallback((file: File) => {
-    setFileName(file.name);
-    setUploaded(true);
-    const info: DatasetInfo = {
-      name: file.name,
-      rows: 150,
-      columns: 5,
-      targetColumn: "species",
-      preview: MOCK_PREVIEW,
-      numericFeatures: 4,
-      categoricalFeatures: 1,
-      missingPercentage: 0,
-      classImbalance: 0.33,
-    };
-    setDataset(info);
-    setStep("uploaded");
+  const handleFile = useCallback(async (file: File) => {
+    setUploading(true);
+    try {
+      const { data, fallback } = await uploadDataset(file);
+      const previewColumns = data.preview.length > 0 ? Object.keys(data.preview[0]) : [];
+      const targetColumn = previewColumns.length > 0 ? previewColumns[previewColumns.length - 1] : "target";
+
+      const info: DatasetInfo = {
+        id: data.id,
+        name: file.name,
+        rows: data.rows,
+        columns: data.columns,
+        targetColumn,
+        preview: data.preview,
+        numericFeatures: 0,
+        categoricalFeatures: 0,
+        missingPercentage: 0,
+        classImbalance: 0,
+      };
+
+      setFileName(file.name);
+      setUploaded(true);
+      setDataset(info);
+      setStep("uploaded");
+
+      if (fallback) {
+        toast("Backend unavailable: using fallback dataset preview.");
+      } else {
+        toast("Dataset uploaded successfully.");
+      }
+    } catch {
+      toast("Dataset upload failed. Please check backend and try again.");
+    } finally {
+      setUploading(false);
+    }
   }, [setDataset, setStep]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -59,7 +68,7 @@ export default function UploadDataset() {
     navigate("/analysis");
   };
 
-  const columns = uploaded ? Object.keys(MOCK_PREVIEW[0]) : [];
+  const columns = uploaded && dataset?.preview?.[0] ? Object.keys(dataset.preview[0]) : [];
 
   return (
     <PageTransition>
@@ -84,9 +93,11 @@ export default function UploadDataset() {
               }`}
             >
               <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-              <p className="text-sm font-medium text-foreground">Upload your dataset (CSV format)</p>
+              <p className="text-sm font-medium text-foreground">
+                {uploading ? "Uploading dataset..." : "Upload your dataset (CSV format)"}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">Drag & drop or click to browse</p>
-              <input type="file" accept=".csv" className="hidden" onChange={onFileInput} />
+              <input type="file" accept=".csv" className="hidden" onChange={onFileInput} disabled={uploading} />
             </motion.label>
           ) : (
             <motion.div
@@ -112,10 +123,10 @@ export default function UploadDataset() {
                       </tr>
                     </thead>
                     <tbody>
-                      {MOCK_PREVIEW.map((row, i) => (
+                      {(dataset?.preview ?? []).map((row, i) => (
                         <tr key={i} className="border-b border-border last:border-0">
                           {columns.map((col) => (
-                            <td key={col} className="px-4 py-2.5 text-foreground">{String(row[col as keyof typeof row])}</td>
+                            <td key={col} className="px-4 py-2.5 text-foreground">{String(row[col as keyof typeof row] ?? "")}</td>
                           ))}
                         </tr>
                       ))}
@@ -128,21 +139,21 @@ export default function UploadDataset() {
                 <div className="card-static p-4 flex items-center gap-3">
                   <Rows3 className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="text-lg font-semibold text-foreground">150</p>
+                    <p className="text-lg font-semibold text-foreground">{dataset?.rows ?? 0}</p>
                     <p className="text-xs text-muted-foreground">Rows</p>
                   </div>
                 </div>
                 <div className="card-static p-4 flex items-center gap-3">
                   <Columns3 className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="text-lg font-semibold text-foreground">5</p>
+                    <p className="text-lg font-semibold text-foreground">{dataset?.columns ?? 0}</p>
                     <p className="text-xs text-muted-foreground">Columns</p>
                   </div>
                 </div>
                 <div className="card-static p-4 flex items-center gap-3">
                   <Target className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="text-lg font-semibold text-foreground">species</p>
+                    <p className="text-lg font-semibold text-foreground">{dataset?.targetColumn ?? "target"}</p>
                     <p className="text-xs text-muted-foreground">Target column</p>
                   </div>
                 </div>

@@ -4,12 +4,14 @@ import type { DatasetInfo, ModelRecommendation, TrainingResult, Experiment, Pipe
 interface PipelineState {
   step: PipelineStep;
   dataset: DatasetInfo | null;
+  userInstruction: string;
   recommendations: ModelRecommendation[];
   trainingResults: TrainingResult[];
   trainingProgress: Record<string, number>;
   experiments: Experiment[];
   setStep: (step: PipelineStep) => void;
   setDataset: (d: DatasetInfo) => void;
+  setUserInstruction: (i: string) => void;
   setRecommendations: (r: ModelRecommendation[]) => void;
   setTrainingResults: (r: TrainingResult[]) => void;
   setTrainingProgress: (p: Record<string, number>) => void;
@@ -20,6 +22,7 @@ interface PipelineState {
 export const usePipeline = create<PipelineState>((set) => ({
   step: "idle",
   dataset: null,
+  userInstruction: "",
   recommendations: [],
   trainingResults: [],
   trainingProgress: {},
@@ -30,6 +33,7 @@ export const usePipeline = create<PipelineState>((set) => ({
   ],
   setStep: (step) => set({ step }),
   setDataset: (dataset) => set({ dataset }),
+  setUserInstruction: (userInstruction) => set({ userInstruction }),
   setRecommendations: (recommendations) => set({ recommendations }),
   setTrainingResults: (trainingResults) => set({ trainingResults }),
   setTrainingProgress: (trainingProgress) => set({ trainingProgress }),

@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageTransition from "@/components/PageTransition";
 import MetricCard from "@/components/MetricCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, Loader2, Rows3, Columns3, Hash, Type, AlertTriangle, Scale } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { toast } from "@/components/ui/sonner";
 import { usePipeline } from "@/store/pipeline";
+import { analyzeDataset } from "@/lib/api";
 
 const analysisSteps = [
   "Extracting dataset metadata",
@@ -14,6 +16,9 @@ const analysisSteps = [
   "Calculating statistical metrics",
 ];
 
+const STEP_ANIMATION_MS = 2200;
+const COMPLETE_DELAY_MS = 900;
+
 const featureDistData = [
   { name: "0-2", count: 35 },
   { name: "2-4", count: 45 },
@@ -21,46 +26,124 @@ const featureDistData = [
   { name: "6-8", count: 30 },
 ];
 
-const classDistData = [
-  { name: "setosa", value: 50 },
-  { name: "versicolor", value: 50 },
-  { name: "virginica", value: 50 },
-];
-
 const PIE_COLORS = ["hsl(217, 91%, 53%)", "hsl(217, 91%, 70%)", "hsl(217, 91%, 85%)"];
 
 export default function DatasetAnalysis() {
-  const { step, setStep, dataset } = usePipeline();
+  const { step, setStep, dataset, setDataset } = usePipeline();
   const navigate = useNavigate();
+  const redirectedRef = useRef(false);
+  const analysisRunKeyRef = useRef<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
-  const [done, setDone] = useState(step === "analyzed" || step === "recommended" || step === "trained" || step === "complete");
+  const [apiFinished, setApiFinished] = useState(false);
+  const [animationFinished, setAnimationFinished] = useState(false);
+  const [done, setDone] = useState(
+    step === "analyzed" || step === "configuring" || step === "recommending" || step === "recommended" || step === "training" || step === "trained" || step === "complete"
+  );
 
   useEffect(() => {
-    if (step !== "analyzing") return;
+    if (!dataset && !redirectedRef.current) {
+      redirectedRef.current = true;
+      toast("Please upload a dataset first.");
+      navigate("/upload");
+    }
+  }, [dataset, navigate]);
+
+  useEffect(() => {
+    if (!dataset) {
+      analysisRunKeyRef.current = null;
+      return;
+    }
+
+    // When this page is opened directly (e.g. from sidebar), kick off analysis automatically.
+    if (step === "uploaded") {
+      analysisRunKeyRef.current = null;
+      setDone(false);
+      setCurrentStep(0);
+      setApiFinished(false);
+      setAnimationFinished(false);
+      setStep("analyzing");
+      return;
+    }
+
+    if (step !== "analyzing") {
+      return;
+    }
+
+    const runKey = `${dataset.id}:${dataset.targetColumn}`;
+    if (analysisRunKeyRef.current === runKey) {
+      return;
+    }
+    analysisRunKeyRef.current = runKey;
+    setDone(false);
+    setCurrentStep(0);
+    setApiFinished(false);
+    setAnimationFinished(false);
+
+    let cancelled = false;
+    let completeTimer: NodeJS.Timeout | null = null;
+
     const timers: NodeJS.Timeout[] = [];
     analysisSteps.forEach((_, i) => {
       timers.push(setTimeout(() => {
         setCurrentStep(i + 1);
-        if (i === analysisSteps.length - 1) {
-          setTimeout(() => {
-            setDone(true);
-            setStep("analyzed");
-          }, 800);
-        }
-      }, (i + 1) * 1200));
+      }, (i + 1) * STEP_ANIMATION_MS));
     });
-    return () => timers.forEach(clearTimeout);
-  }, [step, setStep]);
+    timers.push(setTimeout(() => {
+      setAnimationFinished(true);
+    }, analysisSteps.length * STEP_ANIMATION_MS + 200));
+
+    const runAnalysis = async () => {
+      try {
+        const { data, fallback } = await analyzeDataset(dataset.id, dataset.targetColumn);
+        if (cancelled) return;
+
+        setDataset({
+          ...dataset,
+          rows: data.number_of_samples,
+          columns: data.number_of_features + 1,
+          numericFeatures: data.numeric_feature_count,
+          categoricalFeatures: data.categorical_feature_count,
+          missingPercentage: Number((data.missing_value_ratio * 100).toFixed(2)),
+          classImbalance: data.imbalance_ratio,
+          classDistribution: data.class_distribution,
+        });
+
+        if (fallback) {
+          toast("Analyze API unavailable: showing fallback analysis.");
+        }
+      } catch {
+        if (!cancelled) {
+          toast("Dataset analysis failed.");
+        }
+      } finally {
+        if (!cancelled) {
+          completeTimer = setTimeout(() => {
+            setApiFinished(true);
+          }, COMPLETE_DELAY_MS);
+        }
+      }
+    };
+
+    runAnalysis();
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      if (completeTimer) clearTimeout(completeTimer);
+    };
+  }, [step, setStep, dataset?.id, dataset?.targetColumn, setDataset]);
 
   useEffect(() => {
-    if (step === "analyzed" && done) {
-      const t = setTimeout(() => {
-        setStep("recommending");
-        navigate("/recommendation");
-      }, 3000);
-      return () => clearTimeout(t);
+    if (step === "analyzing" && apiFinished && animationFinished) {
+      setDone(true);
+      setStep("analyzed");
     }
-  }, [step, done, setStep, navigate]);
+  }, [step, apiFinished, animationFinished, setStep]);
+
+  const classDistData = Object.entries(dataset?.classDistribution ?? { setosa: 0.333, versicolor: 0.333, virginica: 0.333 })
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([name, value]) => ({ name, value: Number((value * 100).toFixed(2)) }));
 
   return (
     <PageTransition>
@@ -112,11 +195,11 @@ export default function DatasetAnalysis() {
             <motion.div key="results" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 <MetricCard icon={Rows3} value={dataset?.rows ?? 150} label="Samples" delay={0} />
-                <MetricCard icon={Columns3} value={dataset?.columns ?? 5} label="Features" delay={0.05} />
+                <MetricCard icon={Columns3} value={dataset ? Math.max(dataset.columns - 1, 0) : 4} label="Features" delay={0.05} />
                 <MetricCard icon={Hash} value={dataset?.numericFeatures ?? 4} label="Numeric Features" delay={0.1} />
                 <MetricCard icon={Type} value={dataset?.categoricalFeatures ?? 1} label="Categorical Features" delay={0.15} />
                 <MetricCard icon={AlertTriangle} value={`${dataset?.missingPercentage ?? 0}%`} label="Missing Values" delay={0.2} />
-                <MetricCard icon={Scale} value={`${((dataset?.classImbalance ?? 0.33) * 100).toFixed(0)}%`} label="Class Balance" delay={0.25} />
+                <MetricCard icon={Scale} value={`${(dataset?.classImbalance ?? 1).toFixed(2)}x`} label="Imbalance Ratio" delay={0.25} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -142,7 +225,7 @@ export default function DatasetAnalysis() {
                       <PieChart>
                         <Pie data={classDistData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" label={({ name }) => name}>
                           {classDistData.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i]} />
+                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
                         </Pie>
                         <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }} />
@@ -152,7 +235,15 @@ export default function DatasetAnalysis() {
                 </motion.div>
               </div>
 
-              <p className="text-xs text-muted-foreground text-center">Proceeding to model recommendation...</p>
+              <p className="text-xs text-muted-foreground text-center">Analysis complete. Continue when ready.</p>
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={() => { setStep("configuring"); navigate("/recommendation"); }}
+                  className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  Continue to Recommendations →
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
