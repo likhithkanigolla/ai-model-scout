@@ -52,23 +52,32 @@ export default function ModelRecommendation() {
   const [recommendationStarted, setRecommendationStarted] = useState(false);
   const [localInstruction, setLocalInstruction] = useState(userInstruction);
 
-  const enrichRecommendation = (name: string, reason: string, index: number): MR => {
-    const strengthMap: Record<string, string[]> = {
-      "Random Forest": ["Robust on tabular", "Low overfitting risk", "Feature importance"],
-      XGBoost: ["High predictive power", "Regularized boosting", "Handles nonlinearity"],
-      "Support Vector Machine": ["Strong decision margins", "Kernel-based", "High-dimensional support"],
-      SVM: ["Strong decision margins", "Kernel-based", "High-dimensional support"],
-      "Logistic Regression": ["Interpretable", "Fast baseline", "Stable training"],
-      "K-Nearest Neighbors": ["Simple baseline", "Non-parametric", "Local structure aware"],
-    };
-
-    return {
-      name,
-      reason,
-      strengths: strengthMap[name] ?? ["Works on tabular data", "General-purpose classifier", "Reliable baseline"],
-      score: Number((0.95 - index * 0.03).toFixed(2)),
-    };
+  const getStrengths = (name: string): string[] => {
+    const n = name.toLowerCase();
+    if (n.includes("random forest")) return ["Robust on tabular data", "Low overfitting risk", "Built-in feature importance"];
+    if (n.includes("xgboost") || n.includes("xgb")) return ["High predictive power", "Regularized boosting", "Handles nonlinearity"];
+    if (n.includes("lightgbm") || n.includes("light gbm")) return ["Fast training", "Memory efficient", "Handles large datasets"];
+    if (n.includes("catboost")) return ["Native categorical support", "Low tuning effort", "Strong out-of-box performance"];
+    if (n.includes("gradient boosting") || n.includes("gradientboosting")) return ["High accuracy", "Ensemble stability", "Handles nonlinearity"];
+    if (n.includes("support vector") || n.includes("svm") || n.includes("svc")) return ["Strong decision margins", "Kernel flexibility", "High-dimensional support"];
+    if (n.includes("logistic")) return ["Highly interpretable", "Fast baseline", "Stable training"];
+    if (n.includes("k-nearest") || n.includes("knn") || n.includes("k nearest")) return ["Simple baseline", "Non-parametric", "Local structure aware"];
+    if (n.includes("gaussiannb") || n.includes("naive bayes") || n.includes("gaussian")) return ["Very fast training", "Works with small data", "Probabilistic output"];
+    if (n.includes("decision tree")) return ["Fully interpretable", "No feature scaling needed", "Fast inference"];
+    if (n.includes("neural") || n.includes("mlp") || n.includes("deep")) return ["High capacity learner", "Learns complex patterns", "Flexible architecture"];
+    if (n.includes("ada") || n.includes("adaboost")) return ["Adaptive boosting", "Reduces bias", "Works well with weak learners"];
+    return ["Works on tabular data", "General-purpose classifier", "Reliable baseline"];
   };
+
+  const enrichRecommendation = (name: string, reason: string, index: number): MR => ({
+    name,
+    reason,
+    strengths: getStrengths(name),
+    // 0-based rank — no fake accuracy score, backend only returns a ranked list
+    score: index,
+  });
+
+
 
   const handleSubmitInstruction = () => {
     setUserInstruction(localInstruction);
@@ -247,7 +256,7 @@ export default function ModelRecommendation() {
                       <p className="text-sm text-muted-foreground mt-1">{model.reason}</p>
                     </div>
                     <span className="text-xs font-medium text-primary bg-sidebar-accent px-3 py-1 rounded-full">
-                      Score: {(model.score * 100).toFixed(0)}%
+                      {model.score === 0 ? "🥇 Top Pick" : model.score === 1 ? "#2 Recommended" : `#${model.score + 1} Recommended`}
                     </span>
                   </div>
                   <div className="flex gap-3 mt-4">

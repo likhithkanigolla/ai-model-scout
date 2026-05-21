@@ -24,6 +24,7 @@ export interface ModelRecommendation {
   name: string;
   reason: string;
   strengths: string[];
+  /** 0-based rank returned by the backend recommendation engine (0 = top pick) */
   score: number;
 }
 

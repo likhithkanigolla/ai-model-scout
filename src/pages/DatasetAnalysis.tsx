@@ -139,6 +139,10 @@ export default function DatasetAnalysis() {
       timers.forEach(clearTimeout);
       if (completeTimer) clearTimeout(completeTimer);
     };
+  // Intentionally excludes dataset?.excludedColumns: the API call inside this effect
+  // updates dataset.excludedColumns via setDataset. Adding it to deps would re-trigger
+  // the effect while step is still "analyzing", resetting apiFinished and preventing
+  // completion. The analysisRunKeyRef.current = null in rerunAnalysis handles re-runs correctly.
   }, [step, setStep, dataset?.id, dataset?.targetColumn, setDataset]);
 
   useEffect(() => {
@@ -192,6 +196,8 @@ export default function DatasetAnalysis() {
     }
 
     const nextExcludedColumns = localExcludedColumns.filter((column) => column !== localTargetColumn);
+    // Clear the dedup key BEFORE updating dataset so the effect always fires for this new config.
+    analysisRunKeyRef.current = null;
     setDataset({
       ...dataset,
       targetColumn: localTargetColumn,
